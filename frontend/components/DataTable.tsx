@@ -2,8 +2,8 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { useQuery, keepPreviousData } from "@tanstack/react-query"
-import { useState, useMemo, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useMemo, useRef, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -74,19 +74,67 @@ async function fetchProducts(params: {
   return response.json()
 }
 
+async function fetchCategories(): Promise<string[]> {
+  const response = await fetch(`${API_URL}/api/products/categories`)
+  if (!response.ok) {
+    throw new Error("Failed to fetch categories")
+  }
+  return response.json()
+}
+
 export function DataTable() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const parentRef = useRef<HTMLDivElement>(null)
 
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(50)
-  const [search, setSearch] = useState("")
-  const [category, setCategory] = useState<string>("")
-  const [minPrice, setMinPrice] = useState<string>("")
-  const [maxPrice, setMaxPrice] = useState<string>("")
-  const [minRating, setMinRating] = useState<string>("")
-  const [sortBy, setSortBy] = useState<SortField>("created_at")
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
+  // Initialize state from URL params
+  const [page, setPage] = useState(() => {
+    const p = searchParams.get("page")
+    return p ? parseInt(p, 10) : 1
+  })
+  const [pageSize, setPageSize] = useState(() => {
+    const ps = searchParams.get("page_size")
+    return ps ? parseInt(ps, 10) : 50
+  })
+  const [search, setSearch] = useState(() => searchParams.get("search") || "")
+  const [category, setCategory] = useState<string>(() => searchParams.get("category") || "")
+  const [minPrice, setMinPrice] = useState<string>(() => searchParams.get("min_price") || "")
+  const [maxPrice, setMaxPrice] = useState<string>(() => searchParams.get("max_price") || "")
+  const [minRating, setMinRating] = useState<string>(() => searchParams.get("min_rating") || "")
+  const [sortBy, setSortBy] = useState<SortField>(() => {
+    const sb = searchParams.get("sort_by")
+    return (sb as SortField) || "created_at"
+  })
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
+    const so = searchParams.get("sort_order")
+    return (so as SortOrder) || "desc"
+  })
+
+  // Update URL when filters change (skip initial mount to avoid double update)
+  const isInitialMount = useRef(true)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+
+    const params = new URLSearchParams()
+    if (page > 1) params.set("page", page.toString())
+    if (pageSize !== 50) params.set("page_size", pageSize.toString())
+    if (search) params.set("search", search)
+    if (category) params.set("category", category)
+    if (minPrice) params.set("min_price", minPrice)
+    if (maxPrice) params.set("max_price", maxPrice)
+    if (minRating) params.set("min_rating", minRating)
+    if (sortBy !== "created_at") params.set("sort_by", sortBy)
+    if (sortOrder !== "desc") params.set("sort_order", sortOrder)
+
+    const newUrl = params.toString() ? `/?${params.toString()}` : "/"
+    const currentUrl = window.location.pathname + window.location.search
+    if (newUrl !== currentUrl) {
+      router.replace(newUrl, { scroll: false })
+    }
+  }, [page, pageSize, search, category, minPrice, maxPrice, minRating, sortBy, sortOrder])
 
   const queryParams = useMemo(
     () => ({
@@ -109,6 +157,12 @@ export function DataTable() {
     placeholderData: keepPreviousData,
   })
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: fetchCategories,
+    staleTime: 60 * 60 * 1000, // Cache for 1 hour
+  })
+
   const products = data?.items || []
 
   const virtualizer = useVirtualizer({
@@ -119,7 +173,20 @@ export function DataTable() {
   })
 
   const handleRowClick = (productId: number) => {
-    router.push(`/products/${productId}`)
+    // Preserve current filters in URL when navigating to product detail
+    const params = new URLSearchParams()
+    if (page > 1) params.set("page", page.toString())
+    if (pageSize !== 50) params.set("page_size", pageSize.toString())
+    if (search) params.set("search", search)
+    if (category) params.set("category", category)
+    if (minPrice) params.set("min_price", minPrice)
+    if (maxPrice) params.set("max_price", maxPrice)
+    if (minRating) params.set("min_rating", minRating)
+    if (sortBy !== "created_at") params.set("sort_by", sortBy)
+    if (sortOrder !== "desc") params.set("sort_order", sortOrder)
+
+    const queryString = params.toString()
+    router.push(`/products/${productId}${queryString ? `?${queryString}` : ""}`)
   }
 
   const handleSearchChange = (value: string) => {
@@ -169,15 +236,25 @@ export function DataTable() {
         </div>
 
         <div className="w-[180px]">
-          <Input
-            type="text"
-            placeholder="Category"
+          <Select
             value={category}
-            onChange={(e) => {
-              setCategory(e.target.value)
+            onValueChange={(value) => {
+              setCategory(value === "all" ? "" : value)
               handleFilterChange()
             }}
-          />
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="w-[140px]">

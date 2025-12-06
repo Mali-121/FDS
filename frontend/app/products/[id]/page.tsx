@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeft } from "lucide-react"
@@ -30,7 +30,14 @@ async function fetchProduct(id: string): Promise<Product> {
 export default function ProductDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const productId = params.id as string
+
+  // Get query params to preserve filters when going back
+  const getBackUrl = () => {
+    const queryString = searchParams.toString()
+    return queryString ? `/?${queryString}` : "/"
+  }
 
   const { data: product, isLoading, isError } = useQuery({
     queryKey: ["product", productId],
@@ -57,7 +64,7 @@ export default function ProductDetailPage() {
       <div className="container mx-auto p-6 max-w-2xl">
         <Button
           variant="ghost"
-          onClick={() => router.back()}
+          onClick={() => router.push(getBackUrl())}
           className="mb-6"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -79,7 +86,7 @@ export default function ProductDetailPage() {
     <div className="container mx-auto p-6 max-w-2xl">
       <Button
         variant="ghost"
-        onClick={() => router.back()}
+        onClick={() => router.push(getBackUrl())}
         className="mb-6"
       >
         <ArrowLeft className="h-4 w-4 mr-2" />

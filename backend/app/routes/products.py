@@ -52,7 +52,28 @@ async def get_products(
     # Try to get from cache
     cached_result = get_cached(cache_key)
     if cached_result:
-        return ProductListResponse(**cached_result)
+        try:
+            # Validate cached items back to ProductSchema objects
+            # Ensure items are dictionaries, not strings
+            items = cached_result.get("items", [])
+            if items and isinstance(items[0], str):
+                # Old cache format detected - invalidate and query fresh
+                from app.cache import invalidate_cache
+                invalidate_cache("products:list:*")
+                cached_result = None
+            else:
+                # Validate dict items to ProductSchema
+                validated_items = [
+                    ProductSchema.model_validate(item) for item in items
+                ]
+                cached_result["items"] = validated_items
+                return ProductListResponse(**cached_result)
+        except Exception as e:
+            # If validation fails, clear cache and query fresh
+            print(f"Cache validation error: {e}")
+            from app.cache import invalidate_cache
+            invalidate_cache("products:list:*")
+            cached_result = None
 
     # Build query
     query = db.query(Product)
@@ -97,9 +118,10 @@ async def get_products(
     # Calculate total pages
     total_pages = (total + page_size - 1) // page_size
 
-    # Build response
+    # Build response - convert to dicts for caching
+    product_schemas = [ProductSchema.model_validate(p) for p in products]
     response_data = {
-        "items": [ProductSchema.model_validate(p) for p in products],
+        "items": [p.model_dump() for p in product_schemas],  # Convert to dicts for caching
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -114,7 +136,34 @@ async def get_products(
     if elapsed > 100:
         print(f"Warning: Query took {elapsed:.2f}ms (target: <100ms)")
 
-    return ProductListResponse(**response_data)
+    # Return with ProductSchema objects
+    return ProductListResponse(
+        items=product_schemas,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+@router.get("/categories")
+async def get_categories(db: Session = Depends(get_db)):
+    """Get all unique categories. Cached for 1 hour."""
+    cache_key = get_cache_key("products:categories")
+
+    # Try cache
+    cached_result = get_cached(cache_key)
+    if cached_result:
+        return cached_result
+
+    # Query database for unique categories
+    categories = db.query(Product.category).distinct().order_by(Product.category).all()
+    category_list = [cat[0] for cat in categories]
+
+    # Cache for 1 hour (categories don't change often)
+    set_cached(cache_key, category_list, expire=3600)
+
+    return category_list
 
 
 @router.get("/{product_id}", response_model=ProductSchema)
@@ -128,7 +177,7 @@ async def get_product(
     # Try cache
     cached_result = get_cached(cache_key)
     if cached_result:
-        return ProductSchema(**cached_result)
+        return ProductSchema.model_validate(cached_result)
 
     # Query database
     product = db.query(Product).filter(Product.id == product_id).first()
