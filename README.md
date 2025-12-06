@@ -51,6 +51,12 @@ The application will be available at:
 - **Network**: Internal bridge network for service communication
 - **Volumes**: Persistent storage for PostgreSQL and Redis data
 
+## 🚧 Future Improvements
+
+With more time, I would focus on three main areas. First, I would add testing—unit tests for the backend, integration tests for the API, and end-to-end tests for the user interface. This would help catch bugs early and make the code more reliable. Second, I would improve the user experience by adding features like column resizing, bulk actions, export to CSV/Excel, and dark mode. These would make the table more useful for real-world tasks. Third, I would add production features like user authentication, rate limiting, monitoring, and a CI/CD pipeline to deploy changes automatically.
+
+I would also work on performance improvements. Server-side rendering would make the initial page load faster. WebSocket support would allow real-time updates when data changes. I would also do more detailed performance testing to find and fix any slow queries. The current system handles 100k records well, but these improvements would make it work even better with larger datasets.
+
 ## 📁 Project Structure
 
 ```
