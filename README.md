@@ -270,18 +270,4 @@ The application uses SQLAlchemy's `create_all()` for simplicity. In production, 
 alembic init alembic
 alembic revision --autogenerate -m "Initial migration"
 alembic upgrade head
-```
-
-## 📄 License
-
-This project is built for assessment purposes.
-
-## 👤 Author
-
-Built as a full-stack assessment project demonstrating:
-- High-performance data handling
-- Modern web development practices
-- Clean architecture and code organization
-- Performance optimization techniques
-
 
