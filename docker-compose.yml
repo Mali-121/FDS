@@ -1,0 +1,80 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: fds_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fastapi_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  cache:
+    image: redis:7-alpine
+    container_name: fds_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fds_backend
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/fastapi_db
+      REDIS_URL: redis://cache:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fds_frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge
+
+
